@@ -20,7 +20,7 @@ def main():
     print(f"{'Road ID':>8} {'From':>8} {'To':>8} {'Distance (m)':>14} {'Heading cosine':>16} {'Fraction along':>16}")
     for arc, row in zip(ids[0], features[0]):
         start, end = trip["arcs"][arc]
-        print(f"{arc:8d} {start:8d} {end:8d} {row[0]:14.2f} {row[2]:16.3f} {row[5]:16.3f}")
+        print(f"{arc:8d} {start:8d} {end:8d} {row[0]:14.2f} {row[5]:16.3f} {row[1]:16.3f}")
 
     cache = Path(".cache/train") / f"{trip_id}.npz"
     if cache.is_file():

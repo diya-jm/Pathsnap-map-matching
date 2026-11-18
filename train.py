@@ -12,12 +12,11 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, log_loss
-from sklearn.model_selection import GroupKFold
 from sklearn.naive_bayes import GaussianNB
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
-from pathsnap import viterbi
+from pathsnap import viterbi, FEATURES
 from reference import sequence_score
 from prepare import CACHE, RESULTS
 
@@ -96,9 +95,31 @@ def evaluate(model,trips,decoder=False):
 def main():
     train,test=load("train"),load("student_test")
     assert len(train)==80 and len(test)==10
+    if any(t["x"].shape[-1] != len(FEATURES) for t in train + test):
+        raise ValueError(f"Prepared caches must contain the {len(FEATURES)} required features; rerun `python prepare.py`.")
+    assignment_path = RESULTS / "review2_fold_assignments.csv"
+    if not assignment_path.exists():
+        raise FileNotFoundError("Run `python prepare.py` first to create the shared Review 2 fold assignments.")
+    fold_by_trip = {}
+    with assignment_path.open(newline="", encoding="utf-8") as stream:
+        for row in csv.DictReader(stream):
+            trip_id = row["trip"]
+            if trip_id in fold_by_trip:
+                raise ValueError(f"Trip {trip_id} appears more than once in the fold manifest")
+            fold_by_trip[trip_id] = int(row["validation_fold"])
+    train_names = {t["name"] for t in train}
+    test_names = {t["name"] for t in test}
+    if set(fold_by_trip) != train_names or set(fold_by_trip) & test_names:
+        raise ValueError("Review 2 fold manifest must cover training trips only, exactly once")
     folds=[]
-    for a,b in GroupKFold(3).split(train,groups=[t["name"] for t in train]):
-        folds.append((arrays([train[i] for i in a]),[train[i] for i in b]))
+    for fold_id in range(1,4):
+        val=[t for t in train if fold_by_trip[t["name"]] == fold_id]
+        fit=[t for t in train if fold_by_trip[t["name"]] != fold_id]
+        fit_names={t["name"] for t in fit}
+        val_names={t["name"] for t in val}
+        if not val or fit_names & val_names:
+            raise ValueError(f"Invalid trip-grouped fold {fold_id}")
+        folds.append((arrays(fit),val))
     all_x,all_y=arrays(train)
     summary=[]; fold_rows=[]
     def cross(model,label,trial=False):
@@ -165,7 +186,8 @@ def main():
     joblib.dump(tuned,"artifacts/model.joblib",compress=3)
     Path("artifacts/config.json").write_text(json.dumps(dict(model=best,parameter=key,value=value,
        seed=SEED,search_min=grid.min().item(),search_max=grid.max().item(),candidates=8,
-       gap_seconds=15,disconnection_penalty=3),indent=2))
+       gap_seconds=15,disconnection_penalty=3,features=FEATURES,n_features=len(FEATURES),
+       validation_folds=3),indent=2))
 if __name__=="__main__":
     main()
 

@@ -1,11 +1,25 @@
 {
   "model": "HistBoost",
   "parameter": "learning_rate",
-  "value": 0.07404131173250059,
+  "value": 0.07745966692414835,
   "seed": 138,
   "search_min": 0.02,
   "search_max": 0.3,
   "candidates": 8,
   "gap_seconds": 15,
-  "disconnection_penalty": 3
+  "disconnection_penalty": 3,
+  "features": [
+    "dist",
+    "t",
+    "alen",
+    "speed",
+    "gap",
+    "cos_h",
+    "dh_deg",
+    "n_cand",
+    "rank",
+    "d_minus_best"
+  ],
+  "n_features": 10,
+  "validation_folds": 3
 }

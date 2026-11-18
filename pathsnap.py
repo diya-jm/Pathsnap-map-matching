@@ -4,8 +4,9 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 K = 8
-FEATURES = ["distance_m", "excess_distance_m", "heading_cosine", "speed_mps",
-            "arc_length_m", "fraction_along", "gap_seconds", "heading_available"]
+RADIUS_M = 60.0
+FEATURES = ["dist", "t", "alen", "speed", "gap", "cos_h", "dh_deg",
+            "n_cand", "rank", "d_minus_best"]
 
 def read_trip(folder):
     def read(ext, dtype):
@@ -43,9 +44,16 @@ def candidates(t):
     _, neighbors = tree.query(xy, k=min(64,len(ids)))
     neighbors = np.asarray(neighbors).reshape(len(xy),-1)
     pool = ids[neighbors]
-    d, _ = project(t, xy[:,None,:], pool)
-    order = np.argsort(d,axis=1,kind="stable")
+    pool_dist, _ = project(t, xy[:,None,:], pool)
+    order = np.argsort(pool_dist,axis=1,kind="stable")
     ranked = np.take_along_axis(pool,order,axis=1)
+    ranked_dist = np.take_along_axis(pool_dist,order,axis=1)
+    # Count distinct nearby road candidates discovered for each GPS point.
+    # The model still receives only the closest K candidates below.
+    nearby_count = np.asarray([
+        len(set(row[dist <= RADIUS_M].tolist()))
+        for row, dist in zip(ranked, ranked_dist)
+    ], dtype=np.float32)
     chosen = np.empty((len(xy),width),int)
     for i,row in enumerate(ranked):
         unique = list(dict.fromkeys(row))
@@ -62,11 +70,20 @@ def candidates(t):
     motion = np.linalg.norm(delta,axis=1)
     dt = gps[right,2]-gps[left,2]
     valid = (dt>0)&(dt<=15)&(motion>=3)
-    cosine = (delta[:,None,:]*t["v"][chosen]).sum(-1)/np.maximum(motion[:,None]*t["length"][chosen],1e-9)
+    road_vectors = t["v"][chosen]
+    gps_heading = np.arctan2(delta[:,1], delta[:,0])
+    road_heading = np.arctan2(road_vectors[:,:,1], road_vectors[:,:,0])
+    angle = (gps_heading[:,None] - road_heading + np.pi) % (2*np.pi) - np.pi
+    cosine = np.cos(angle)
+    cosine = np.where(valid[:,None], cosine, 0.)
+    heading_diff = np.where(valid[:,None], np.abs(np.degrees(angle)), 90.)
+    ranks = np.argsort(np.argsort(dist,axis=1,kind="stable"),axis=1,kind="stable") + 1
+    excess = dist - dist.min(axis=1,keepdims=True)
     broadcast = lambda arr: np.broadcast_to(arr[:,None],dist.shape)
-    x = np.stack([dist,dist-dist.min(1,keepdims=True),cosine*valid[:,None],
-                  broadcast(np.clip(motion/np.maximum(dt,1),0,80)),t["length"][chosen],
-                  fraction,broadcast(np.r_[0,np.diff(gps[:,2])]),broadcast(valid)],axis=-1)
+    x = np.stack([dist, fraction, t["length"][chosen],
+                  broadcast(np.clip(motion/np.maximum(dt,1),0,80)),
+                  broadcast(np.r_[0,np.diff(gps[:,2])]), cosine, heading_diff,
+                  broadcast(nearby_count), ranks, excess],axis=-1)
     return chosen, x.astype("float32")
 
 def decode(t, ids, probability):

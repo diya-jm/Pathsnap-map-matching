@@ -1,0 +1,3 @@
+split,trips,candidate_rows,feature_columns,positive_labels,negative_labels,group_count,included_in_cv
+train,80,1667336,10,192022,1475314,80,yes
+student_test,10,,10,,,10,no; held separate

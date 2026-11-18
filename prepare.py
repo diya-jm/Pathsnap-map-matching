@@ -5,8 +5,11 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 from pathsnap import read_trip,candidates
 from reference import labels
+from review2_data import build as build_review2
 
 ROOT=Path("data/Student folder")
+if not ROOT.exists():
+    ROOT=Path("pathsnap/data/raw")
 CACHE=Path(".cache")
 RESULTS=Path("results")
 
@@ -35,6 +38,7 @@ def prepare():
                 candidate_misses=int((~(ids==y[:,None]).any(1)).sum())))
     with (RESULTS/"inventory.csv").open("w",newline="") as f:
         w=csv.DictWriter(f,fieldnames=rows[0]); w.writeheader(); w.writerows(rows)
+    build_review2()
 if __name__=="__main__":
     prepare()
 

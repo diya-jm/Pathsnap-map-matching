@@ -1,7 +1,7 @@
 # PathSnap
 Reconstruct directed road segments from noisy GPS observations. The classifier scores nearby segments and Viterbi selects a sequence across the trip.
 
-The root application and saved metrics use eight features. The ten-feature Review 1 implementation, notebook and demo are under pathsnap/. The saved root results describe the eight-feature run.
+The root application and Review 2 training pipeline use the required ten candidate features. `prepare.py` builds `X`, binary `y`, trip-ID `groups`, and a shared three-fold manifest from the 80 training trips; the ten student-test trips remain outside cross-validation. The nested `pathsnap/` folder also contains the Review 1 feature implementation, notebook and demo.
 
 ## Run the development demo
 Use Python 3.12 x64. From the repository root in PowerShell:
@@ -32,10 +32,11 @@ python maps.py
 python report.py
 ```
 
-`prepare.py` writes a per-trip inventory and reusable candidate features. `train.py` records fold scores, all five baselines, eight Bayesian trials, a tuned model, the decoder comparison and a serialized estimator. The report generator accepts an exported view of the generated Folium map at `evidence/folium.png`. Open `maps/student_test_00000007.html` to explore the map. Its JavaScript and CSS are bundled. OpenStreetMap tiles are unnecessary. Metrics in the PDF come from the CSVs. Exact run times depend on the machine.
+`prepare.py` writes a per-trip inventory and reusable ten-feature candidate data. It also creates `results/review2_dataset_summary.csv`, `results/review2_fold_assignments.csv`, and `results/review2_fold_summary.csv`; these record the `X`/`y`/`groups` dimensions, class counts, trip membership, and zero fit/validation trip overlap. `train.py` consumes those same fold assignments and records fold scores, all five baselines, eight Bayesian trials, a tuned model, the decoder comparison and a serialized ten-feature estimator. The report generator accepts an exported view of the generated Folium map at `evidence/folium.png`. Open `maps/student_test_00000007.html` to explore the map. Its JavaScript and CSS are bundled. OpenStreetMap tiles are unnecessary. Metrics in the PDF come from the CSVs. Exact run times depend on the machine.
 
 ## Where to look
-- `pathsnap.py` contains feature extraction and the Viterbi implementation. It reads only GPS and network data.
+- `pathsnap.py` contains the ten-feature candidate extraction and the Viterbi implementation. It reads only GPS and network data.
+- `review2_data.py` materializes the training `X`, binary `y`, and trip-ID `groups` for review, writes the shared trip-grouped fold manifests, and keeps student-test trips out of CV.
 - `reference.py` aligns the supplied ordered route to GPS times for training labels and scoring. The point labels are estimates. The server loads reference information after predictions are complete.
 - `results/` contains measured values, per-trip EDA, validation folds, tuning trials and decoding results. `artifacts/` contains the fitted model and configuration. Load only trusted model files.
 - `api.py`, `serve.py` and `ui/index.html` implement the two-laptop application. GET /trips lists trip IDs. GET /match/{trip_id} returns predictions, GPS, geometry, elapsed time and aggregate scores. Missing reference data disables reference-dependent scores.
