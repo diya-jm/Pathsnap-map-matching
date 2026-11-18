@@ -1,5 +1,7 @@
 ## 2. Preprocessing and features
 
+> **Scope note:** This draft describes the separate Review 1 pipeline in `pathsnap/src/`. It is not the preprocessing used by the root Review 2 model/API (`pathsnap.py`, `prepare.py`, `train.py`, `api.py`). Use the consolidated `report/PathSnap.pdf` for the active model's preprocessing unless the team intentionally combines and reconciles these two implementations.
+
 We read each trip's GPS track, road nodes, directed arcs, and reference route. GPS observations with a missing field are removed, and the remaining observations are sorted by timestamp. The loader applies the null-row drop defensively; in the current workspace copy, trip 57's raw track contains 1,645 complete rows and no NaN rows, although 25 integer timestamps are absent between 1 and 1,670.
 
 Longitude and latitude are projected into the UTM zone selected from each trip's median coordinates, so candidate distances and geometric features are expressed in metres using a locally appropriate zone. For each trip, the road network is cropped to arcs whose endpoint nodes lie inside the GPS-track bounding box expanded by 300 m. This reduces the network searched for candidates while retaining nearby roads. At each GPS point, arcs within a 60 m distance threshold are candidates. The threshold defines the local search neighbourhood; it can omit observations farther from the mapped network, so we monitor candidate and label misses rather than treating 60 m as guaranteed coverage.
