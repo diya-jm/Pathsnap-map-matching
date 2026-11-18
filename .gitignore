@@ -1,0 +1,3 @@
+pathsnap/artifacts/*.joblib
+pathsnap/results/*.pkl
+pathsnap/src/__pycache__/
