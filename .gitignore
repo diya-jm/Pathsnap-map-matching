@@ -1,3 +1,13 @@
 pathsnap/artifacts/*.joblib
 pathsnap/results/*.pkl
 pathsnap/src/__pycache__/
+data/
+.packages/
+.cache/
+.venv/
+__pycache__/
+*.pyc
+*.log
+.env
+
+

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PathSnap · Trip explorer</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f5ef;color:#19352c;font:16px "Segoe UI",sans-serif}header{background:#173c32;color:white;padding:18px 5vw;font-size:22px;font-weight:700}main{max-width:1160px;margin:auto;padding:32px 24px}h1{font:500 clamp(32px,5vw,56px) Georgia,serif;margin:0 0 24px}form,.metrics,.legend{display:flex;gap:14px;flex-wrap:wrap;align-items:end}label{display:grid;gap:5px;font-size:13px}input,select,button{font:inherit;padding:10px;border:1px solid #adbbb0;border-radius:6px;background:white}button{cursor:pointer;color:white;background:#215440}button:disabled{opacity:.5}.metrics{margin:16px 0}.metrics div{padding:12px 18px;background:white;border:1px solid #dce2d8;min-width:140px}.metrics b{display:block;font-size:23px}.legend{font-size:14px;align-items:center}.key{width:22px;height:4px;display:inline-block;vertical-align:middle;margin-right:5px}canvas{width:100%;height:clamp(280px,50vh,560px);background:#e7ece3;border:1px solid #ced9cd;border-radius:8px;margin:10px 0}#status{min-height:1.4em}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #cc8419}
+</style>
+<header>PathSnap</header><main><h1>Trip explorer</h1>
+<form id="form"><label>API address<input id="address" type="url" required></label><button id="connect" type="button">Connect</button><label>Trip<select id="trip" disabled></select></label><button id="match" disabled>Reconstruct route</button></form>
+<p id="status" role="status"></p><div id="metrics" class="metrics"></div>
+<div class="legend"><span><i class="key" style="background:#207658"></i>Predicted road</span><span><i class="key" style="background:#be591e"></i>GPS observations</span></div>
+<canvas aria-label="Geographical plot of GPS observations and predicted road segments"></canvas></main>
+<script>
+const el=id=>document.getElementById(id), canvas=document.querySelector("canvas");
+let result=null, base="", request=0;
+el("address").value=localStorage.getItem("pathsnap-api")||("http://"+location.hostname+":8000");
+function status(s){el("status").textContent=s}
+async function json(url){const r=await fetch(url);if(!r.ok)throw Error("API returned "+r.status);return r.json()}
+async function connect(){
+ const token=++request;el("match").disabled=true;el("trip").disabled=true;el("trip").replaceChildren();
+ result=null;el("metrics").replaceChildren();draw();base=el("address").value.trim().replace(/\/$/,"");status("Connecting…");
+ try{const data=await json(base+"/trips");if(token!==request)return;
+ for(const id of data.trips)el("trip").add(new Option(id,id));
+ el("trip").disabled=el("match").disabled=!data.trips.length;localStorage.setItem("pathsnap-api",base);status(data.trips.length+" trips available")}
+ catch(e){if(token===request)status("Could not connect. Check the API address and network. "+e.message)}
+}
+function draw(){const ctx=canvas.getContext("2d"),w=canvas.clientWidth,h=canvas.clientHeight,d=devicePixelRatio;
+ canvas.width=w*d;canvas.height=h*d;ctx.scale(d,d);if(!result)return;
+ const points=result.gps.concat(result.segments.flat()),bounds=[Infinity,Infinity,-Infinity,-Infinity];
+ for(const [x,y] of points){bounds[0]=Math.min(x,bounds[0]);bounds[1]=Math.min(y,bounds[1]);bounds[2]=Math.max(x,bounds[2]);bounds[3]=Math.max(y,bounds[3])}
+ const [lo,la,hi,ha]=bounds,c=Math.cos((la+ha)*Math.PI/360),s=Math.min((w-40)/Math.max(1e-8,(hi-lo)*c),(h-40)/Math.max(1e-8,ha-la));
+ const pos=([x,y])=>[w/2+(x-(lo+hi)/2)*c*s,h/2-(y-(la+ha)/2)*s];
+ ctx.strokeStyle="#207658";ctx.lineWidth=4;ctx.beginPath();for(const [a,b] of result.segments){ctx.moveTo(...pos(a));ctx.lineTo(...pos(b))}ctx.stroke();
+ ctx.fillStyle="#be591eaa";for(const a of result.gps){const [x,y]=pos(a);ctx.fillRect(x-1,y-1,2,2)}
+}
+el("connect").onclick=connect;el("address").oninput=()=>{request++;el("match").disabled=true;el("trip").disabled=true;status("Connect to load trips from this address")};
+el("form").onsubmit=async e=>{e.preventDefault();const token=++request;el("match").disabled=true;el("trip").disabled=true;status("Matching GPS observations…");
+ try{const data=await json(base+"/match/"+encodeURIComponent(el("trip").value));if(token!==request)return;result=data;draw();el("metrics").replaceChildren();
+ for(const [name,v] of [["Point accuracy",result.metrics.top1],["Route continuity",result.metrics.continuity],["Sequence similarity",result.metrics.sequence],["Observations",result.observations]]){
+ const div=document.createElement("div"),b=document.createElement("b");b.textContent=v==null?"Unavailable":name==="Observations"?v:(v*100).toFixed(1)+"%";div.append(b,name);el("metrics").append(div)}
+ status("Trip "+result.trip+" reconstructed in "+result.seconds.toFixed(2)+" s")}
+ catch(err){if(token===request){result=null;draw();el("metrics").replaceChildren();status(err.message)}}finally{if(token===request)el("trip").disabled=el("match").disabled=false}};
+new ResizeObserver(draw).observe(canvas);connect();
+</script></html>
